@@ -237,3 +237,40 @@ def normalize_status(status):
     if s in ['leave', 'on leave', 'on_leave', 'lwp', 'ooo']:
         return 'On Leave'
     return 'Unknown'
+
+def normalize_protocol(proto):
+    """
+    Standardize network protocol strings and IP protocol numbers to canonical TCP, UDP, ICMP.
+    6 -> TCP, 17 -> UDP, 1 -> ICMP
+    """
+    if pd.isna(proto) or proto is None:
+        return 'UNKNOWN'
+    s = str(proto).strip().upper()
+    if s in ['TCP', '6', 'TCP/6']:
+        return 'TCP'
+    if s in ['UDP', '17', 'UDP/17']:
+        return 'UDP'
+    if s in ['ICMP', '1', 'PING', 'ICMP/1']:
+        return 'ICMP'
+    return s
+
+def normalize_endpoint_status(status):
+    """
+    Standardize EDR alert statuses into canonical workflow categories:
+    NEW, OPEN, IN_PROGRESS, CLOSED, FALSE_POSITIVE
+    """
+    if pd.isna(status) or status is None:
+        return 'UNKNOWN'
+    s = str(status).strip().lower()
+    if s in ['new', 'n', 'unassigned']:
+        return 'NEW'
+    if s in ['open', 'o', 'active']:
+        return 'OPEN'
+    if s in ['in progress', 'in_progress', 'wip', 'investigating']:
+        return 'IN_PROGRESS'
+    if s in ['resolved', 'r', 'closed', 'closed']:
+        return 'CLOSED'
+    if s in ['not malicious', 'false_positive', 'false positive', 'fp']:
+        return 'FALSE_POSITIVE'
+    return s.upper()
+

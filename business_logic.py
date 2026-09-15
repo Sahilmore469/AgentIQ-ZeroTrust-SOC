@@ -57,4 +57,18 @@ def evaluate_security_rules(dim_master, fact_iam, fact_endpoint, fact_firewall, 
     rule7 = rule7.sort_values(by=['host_alerts', 'host_denies', 'host_fails'], ascending=[False, False, False])
     findings['rule7_multivector_host_threats'] = rule7
 
+    # Rule 8: Endpoint Alerts with Impossible Resolution Timestamps
+    if 'impossible_resolution_flag' in fact_endpoint.columns:
+        rule8 = fact_endpoint[fact_endpoint['impossible_resolution_flag'] == True].copy()
+    elif 'detected_timestamp' in fact_endpoint.columns and 'resolved_timestamp' in fact_endpoint.columns:
+        rule8 = fact_endpoint[
+            fact_endpoint['resolved_timestamp'].notna() & 
+            fact_endpoint['detected_timestamp'].notna() & 
+            (fact_endpoint['resolved_timestamp'] < fact_endpoint['detected_timestamp'])
+        ].copy()
+    else:
+        rule8 = pd.DataFrame()
+    findings['rule8_impossible_resolution_alerts'] = rule8
+
     return findings
+

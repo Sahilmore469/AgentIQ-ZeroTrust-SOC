@@ -357,19 +357,24 @@ elif app_view == "2. 👤 Identity & IAM Investigation":
 
 
 # ==============================================================================
+# ==============================================================================
 # VIEW 3: ENDPOINT INVESTIGATION
 # ==============================================================================
 elif app_view == "3. 💻 Endpoint Alert Investigation":
     st.title("💻 Endpoint Detection & Response (EDR) Alerts")
-    st.markdown("Investigate malware classifications, high-criticality host devices, and malicious execution.")
+    st.markdown("Investigate malware classifications, high-criticality host devices, impossible resolution timestamps, and malicious execution.")
 
     f_ep = fact_endpoint[fact_endpoint['user_id'].isin(valid_uids)].copy()
+    impossible_alerts = rules.get('rule8_impossible_resolution_alerts', pd.DataFrame())
+    if not impossible_alerts.empty and 'user_id' in impossible_alerts.columns:
+        impossible_alerts = impossible_alerts[impossible_alerts['user_id'].isin(valid_uids)]
 
-    ec1, ec2, ec3, ec4 = st.columns(4)
+    ec1, ec2, ec3, ec4, ec5 = st.columns(5)
     ec1.metric("Total Endpoint Alerts", f"{len(f_ep):,}")
     ec2.metric("Critical Alerts", f"{(f_ep['severity'] == 'CRITICAL').sum():,}")
     ec3.metric("High Severity Alerts", f"{(f_ep['severity'] == 'HIGH').sum():,}")
     ec4.metric("Unique Target Hosts", f"{f_ep['hostname_norm'].nunique():,}")
+    ec5.metric("Impossible Timestamps", f"{len(impossible_alerts):,}", delta="Anomaly" if len(impossible_alerts) > 0 else "None", delta_color="inverse")
 
     st.markdown("---")
     ep_c1, ep_c2 = st.columns(2)
@@ -381,28 +386,64 @@ elif app_view == "3. 💻 Endpoint Alert Investigation":
             alert_counts, x='count', y='alert_name', color='severity', orientation='h',
             color_discrete_map={'CRITICAL': '#b71c1c', 'HIGH': '#e53935', 'MEDIUM': '#fb8c00', 'LOW': '#fdd835', 'UNKNOWN': '#9e9e9e'}
         )
-        fig_alerts.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
+        fig_alerts.update_layout(height=380, yaxis={'categoryorder': 'total ascending'})
         st.plotly_chart(fig_alerts, use_container_width=True)
 
     with ep_c2:
-        st.subheader("Severity Distribution Across Hostnames")
-        sev_dist = f_ep['severity'].value_counts().reset_index()
-        sev_dist.columns = ['Severity', 'Count']
-        fig_sev_pie = px.pie(
-            sev_dist, names='Severity', values='Count',
-            color='Severity',
-            color_discrete_map={'CRITICAL': '#b71c1c', 'HIGH': '#e53935', 'MEDIUM': '#fb8c00', 'LOW': '#fdd835'}
-        )
-        fig_sev_pie.update_layout(height=400)
-        st.plotly_chart(fig_sev_pie, use_container_width=True)
+        st.subheader("Normalized EDR Workflow Status Breakdown")
+        if 'status_norm' in f_ep.columns:
+            status_dist = f_ep['status_norm'].value_counts().reset_index()
+            status_dist.columns = ['Status', 'Count']
+            fig_status = px.pie(
+                status_dist, names='Status', values='Count',
+                color='Status',
+                color_discrete_map={
+                    'NEW': '#42A5F5', 'OPEN': '#FFB74D', 'IN_PROGRESS': '#AB47BC', 
+                    'CLOSED': '#66BB6A', 'FALSE_POSITIVE': '#78909C'
+                }
+            )
+            fig_status.update_layout(height=380)
+            st.plotly_chart(fig_status, use_container_width=True)
+        else:
+            sev_dist = f_ep['severity'].value_counts().reset_index()
+            sev_dist.columns = ['Severity', 'Count']
+            fig_sev_pie = px.pie(sev_dist, names='Severity', values='Count')
+            fig_sev_pie.update_layout(height=380)
+            st.plotly_chart(fig_sev_pie, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("Critical Endpoint Detections Table")
-    crit_table = f_ep[f_ep['severity'].isin(['CRITICAL', 'HIGH'])][[
-        'alert_id', 'detected_timestamp', 'hostname_norm', 'user_id', 
-        'alert_name', 'severity', 'process_name', 'status'
-    ]].sort_values(by='detected_timestamp', ascending=False)
-    st.dataframe(crit_table.head(25), use_container_width=True, hide_index=True)
+    ep_tab1, ep_tab2 = st.tabs(["🚨 Critical & High EDR Alerts", "⏱️ Alerts with Impossible Resolution Timestamps (Rule 8)"])
+
+    with ep_tab1:
+        st.subheader("Critical & High Severity Detections")
+        crit_cols = ['alert_id', 'detected_timestamp', 'hostname_norm', 'user_id', 'alert_name', 'severity', 'process_name']
+        if 'status_norm' in f_ep.columns:
+            crit_cols.append('status_norm')
+        crit_table = f_ep[f_ep['severity'].isin(['CRITICAL', 'HIGH'])][crit_cols].sort_values(by='detected_timestamp', ascending=False)
+        st.dataframe(crit_table.head(30), use_container_width=True, hide_index=True)
+
+    with ep_tab2:
+        st.subheader("⚠️ Telemetry Integrity Anomaly: Resolved Before Detection")
+        st.markdown(
+            "Identifies endpoint alerts where the recorded `resolved_timestamp` is strictly prior to `detected_timestamp`. "
+            "These anomalies indicate compromised log tamper events, NTP clock drifts, or synthetic telemetry corruption."
+        )
+        if not impossible_alerts.empty:
+            disp_imp = impossible_alerts[[
+                'alert_id', 'detected_timestamp', 'resolved_timestamp', 'hostname_norm', 
+                'user_id', 'alert_name', 'severity'
+            ]].head(30).rename(columns={
+                'alert_id': 'Alert ID',
+                'detected_timestamp': 'Detected (UTC)',
+                'resolved_timestamp': 'Resolved (UTC)',
+                'hostname_norm': 'Host',
+                'user_id': 'User ID',
+                'alert_name': 'Alert Type',
+                'severity': 'Severity'
+            })
+            st.dataframe(disp_imp, use_container_width=True, hide_index=True)
+        else:
+            st.success("No impossible resolution timestamps detected in current filtered scope.")
 
 
 # ==============================================================================
@@ -410,7 +451,7 @@ elif app_view == "3. 💻 Endpoint Alert Investigation":
 # ==============================================================================
 elif app_view == "4. 🌐 Network & Firewall Investigation":
     st.title("🌐 Network Perimeter & Firewall Telemetry")
-    st.markdown("Global origin mapping, perimeter block patterns, and protocol telemetry analysis.")
+    st.markdown("Global origin mapping, perimeter block patterns, normalized protocol telemetry, and port analysis.")
 
     f_fw = fact_firewall[fact_firewall['hostname_norm'].isin(valid_hosts)].copy()
 
@@ -421,7 +462,7 @@ elif app_view == "4. 🌐 Network & Firewall Investigation":
     nc4.metric("Threat Flags Raised", f"{int(f_fw['threat_flag'].sum()):,}")
 
     st.markdown("---")
-    st.subheader("🌍 Global Threat Origins (Blocked Connections)")
+    st.subheader("🌍 Global Threat Origins (Blocked Perimeter Connections)")
     fw_geo = f_fw[f_fw['action'] == 'deny'].groupby('geo_country').size().reset_index(name='blocks')
     fig_map = px.choropleth(
         fw_geo, locations="geo_country", locationmode="country names", 
@@ -439,12 +480,13 @@ elif app_view == "4. 🌐 Network & Firewall Investigation":
     fw_col1, fw_col2 = st.columns(2)
 
     with fw_col1:
-        st.subheader("Firewall Deny Trend by Protocol")
+        st.subheader("Firewall Deny Trend by Normalized Protocol")
         fw_deny = f_fw[f_fw['action'] == 'deny'].copy()
         if not fw_deny.empty and fw_deny['timestamp'].notna().any():
             fw_deny['date'] = fw_deny['timestamp'].dt.date
             fw_trend = fw_deny.groupby(['date', 'protocol']).size().reset_index(name='count')
-            fig_fw_proto = px.area(fw_trend, x='date', y='count', color='protocol')
+            fig_fw_proto = px.area(fw_trend, x='date', y='count', color='protocol',
+                                   color_discrete_map={'TCP': '#EF5350', 'UDP': '#FFA726', 'ICMP': '#AB47BC'})
             fig_fw_proto.update_layout(height=320)
             st.plotly_chart(fig_fw_proto, use_container_width=True)
         else:
@@ -459,14 +501,29 @@ elif app_view == "4. 🌐 Network & Firewall Investigation":
         fig_ports.update_layout(height=320)
         st.plotly_chart(fig_ports, use_container_width=True)
 
+    st.markdown("---")
+    st.subheader("🛡️ Hosts with Highest Threat Flags")
+    threat_hosts_df = f_fw[f_fw['threat_flag'] == True].groupby('hostname_norm').agg(
+        threat_count=('threat_flag', 'count'),
+        denied_traffic=('action', lambda x: (x == 'deny').sum()),
+        total_bytes_sent=('bytes_sent', 'sum')
+    ).reset_index().sort_values(by='threat_count', ascending=False).head(10)
+    
+    st.dataframe(threat_hosts_df.rename(columns={
+        'hostname_norm': 'Target Hostname',
+        'threat_count': 'Threat Flags',
+        'denied_traffic': 'Perimeter Blocks',
+        'total_bytes_sent': 'Total Bytes Sent'
+    }), use_container_width=True, hide_index=True)
+
 
 # ==============================================================================
-# VIEW 5: CROSS-SYSTEM CORRELATION MATRIX
+# VIEW 5: CROSS-SYSTEM CORRELATION MATRIX & INVESTIGATION DRILLDOWN
 # ==============================================================================
 elif app_view == "5. 🔗 Cross-System Correlation Matrix":
     st.title("🔗 Cross-System Correlation & Entity Linkage")
     st.markdown(
-        "Demonstrates the power of the analytical data model by correlating security telemetry "
+        "Demonstrates the power of the star schema analytical model by correlating security telemetry "
         "across **Identity Master**, **IAM Sessions**, **EDR Alerts**, and **Perimeter Firewalls**."
     )
 
@@ -479,9 +536,10 @@ elif app_view == "5. 🔗 Cross-System Correlation Matrix":
 
     st.markdown("---")
 
-    tab_session, tab_prox, tab_diag = st.tabs([
+    tab_session, tab_prox, tab_entity, tab_diag = st.tabs([
         "🔑 IAM ↔ Firewall Session Correlations",
         "⏱️ Host & Temporal Proximity (30m)",
+        "🔎 Interactive Entity Deep-Dive Trace",
         "📊 Join Validation Diagnostics"
     ])
 
@@ -522,7 +580,7 @@ elif app_view == "5. 🔗 Cross-System Correlation Matrix":
         st.subheader("Correlated Events via Same Host & Temporal Proximity (±30 Min)")
         st.markdown(
             "Calculates high-probability attack chains where an IAM authentication attempt "
-            "and firewall connection occur on the exact same host within a 30-minute operational window."
+            "and firewall connection occur on the exact same host within a calibrated 30-minute operational window."
         )
         if not proximity_corr.empty:
             disp_prox = proximity_corr[[
@@ -549,6 +607,42 @@ elif app_view == "5. 🔗 Cross-System Correlation Matrix":
             )
         else:
             st.info("No host proximity correlations within window.")
+
+    with tab_entity:
+        st.subheader("🔎 End-to-End Entity Investigation Workflow")
+        st.markdown(
+            "Trace an identity from master context through IAM authentications, assigned host devices, "
+            "EDR malware alerts, and perimeter network connection activity."
+        )
+        
+        # User selector
+        top_suspects = filtered_user_risk[filtered_user_risk['risk_score'] >= 50.0]['user_id'].tolist()
+        if not top_suspects:
+            top_suspects = filtered_user_risk['user_id'].head(20).tolist()
+            
+        selected_user = st.selectbox("Select Target User ID to Investigate:", options=top_suspects)
+        
+        if selected_user:
+            u_meta = filtered_user_risk[filtered_user_risk['user_id'] == selected_user].iloc[0]
+            assigned_host = u_meta['hostname_norm']
+            
+            trace_c1, trace_c2, trace_c3 = st.columns(3)
+            trace_c1.info(f"**Identity Master Context**\n- **Name**: {u_meta['full_name']}\n- **Dept**: {u_meta['department']}\n- **Status**: {u_meta['status_norm']}\n- **Host**: `{assigned_host}`")
+            trace_c2.warning(f"**Risk Evaluation**\n- **Score**: `{u_meta['risk_score']} / 100`\n- **Level**: `{u_meta['risk_level']}`\n- **Fails**: {int(u_meta['failed_logins'])}\n- **Alerts**: {int(u_meta['total_endpoint_alerts'])}")
+            trace_c3.error(f"**Contributing Factors**\n{u_meta['main_reason']}")
+            
+            st.markdown("##### 1. Associated IAM Audit Trail Events")
+            u_iam = fact_iam[fact_iam['user_id'] == selected_user][['event_id', 'timestamp', 'event_category', 'auth_method', 'source_ip', 'risk_score']].head(10)
+            st.dataframe(u_iam, use_container_width=True, hide_index=True)
+            
+            st.markdown("##### 2. Associated Endpoint Detections")
+            u_edr = fact_endpoint[fact_endpoint['user_id'] == selected_user][['alert_id', 'detected_timestamp', 'alert_name', 'severity', 'process_name']].head(10)
+            st.dataframe(u_edr, use_container_width=True, hide_index=True)
+            
+            if pd.notna(assigned_host):
+                st.markdown(f"##### 3. Associated Perimeter Firewall Activity on Host `{assigned_host}`")
+                u_fw = fact_firewall[fact_firewall['hostname_norm'] == assigned_host][['log_id', 'timestamp', 'action', 'protocol', 'dst_ip', 'dst_port', 'threat_flag']].head(10)
+                st.dataframe(u_fw, use_container_width=True, hide_index=True)
 
     with tab_diag:
         st.subheader("Analytical Data Model Join Quality Diagnostics")
@@ -582,3 +676,4 @@ elif app_view == "5. 🔗 Cross-System Correlation Matrix":
             st.write(f"- **Null Host Keys in Source**: `{fw_d['null_keys']}`")
 
 st.sidebar.caption("SOC Command Center v2.0 • Data Architecture Upgrade")
+
