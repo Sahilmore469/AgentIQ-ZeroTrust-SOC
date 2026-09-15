@@ -1,0 +1,61 @@
+Track 2: Cybersecurity - Zero-Trust Telemetry & Insider Threat Logs
+
+This bundle contains synthetic cybersecurity telemetry data designed for the TransOrg AgentIQ Datathon.
+
+Files included:
+1. track2_firewall_logs.csv
+   - Network/firewall telemetry
+   - Messy IPs, ports, protocols, actions, bytes, session IDs, timestamps
+
+2. track2_iam_audit_trail.json
+   - Identity and access management events
+   - Login success/failure, MFA events, account actions
+   - Messy user IDs, departments, event types, timestamps, risk scores
+
+3. track2_endpoint_alerts.xlsx
+   - Endpoint detection and response alerts
+   - Messy severity, status, alert names, file paths, SHA256 values, timestamps
+
+4. track2_identity_asset_master.csv
+   - User and asset master data
+   - Messy employee IDs, departments, hostnames, device IDs, employee status
+
+5. track2_dataset_notes.txt
+   - This file
+
+Expected join keys:
+- IAM audit trail + Identity master: user_id
+- Endpoint alerts + Identity master: user_id, hostname
+- Firewall logs + Identity master: hostname
+- IAM audit trail + Firewall logs: session_id, hostname, timestamp approximation
+
+Expected student tasks:
+1. Standardize user_id formats such as EMP12345, emp12345, EMP-12345, EMP 12345, 12345.
+2. Standardize department names.
+3. Clean and parse mixed timestamp formats.
+4. Normalize firewall actions, protocols, ports, and byte values.
+5. Normalize IAM event types into login_success, login_failed, other.
+6. Clean endpoint severity and status values.
+7. Handle missing values, duplicates, invalid IPs, invalid ports, invalid risk scores.
+8. Build a security operations dashboard.
+9. Optionally build a graph-first AI agent.
+
+Example dashboard questions:
+- Trend of failed login attempts by department
+- Top users with failed logins
+- Top endpoint alert types by severity
+- Firewall deny trend by protocol
+- Alerts with impossible resolution timestamps
+- Hosts with highest threat flags
+- MFA failure trend
+- Suspicious users with multiple failed logins and endpoint alerts
+
+Example agent queries:
+- Show failed login attempts by department over the last 7 days.
+- Which user has the highest number of failed logins?
+- Show endpoint alerts by severity.
+- Compare firewall allow vs deny actions by protocol.
+- Show daily trend of critical endpoint alerts.
+- Which hostname has the maximum threat flags?
+
+All data is synthetic and generated only for educational/datathon purposes.
