@@ -7,6 +7,12 @@ Our mission is to detect compromised accounts and insider threats by analyzing m
 
 ---
 
+## 🚀 Live Deployments (Gate 3 & 4)
+* **Executive Dashboard:** [View Live Dashboard](https://datathon-e4opafeyjqqdbdxirjygbc.streamlit.app/)
+* **AgentIQ AI Chatbot:** [View Live AI Agent](https://datathon-e8veeg6bkxc9k8dbyi7cin.streamlit.app/)
+
+---
+
 ## How to Run the Project (Gate 1 Requirement)
 
 ### 1. Prerequisites
@@ -29,18 +35,27 @@ streamlit run app.py
 ```
 
 ### 4. Step 3: AgentIQ (Graph-First AI)
-To use the AI Agent, you must configure a free Groq API key (to power the Llama 3 NLP routing). 
+To use the AI Agent, you must configure a free Groq API key (to power the NLP routing). 
 1. Create a file named exactly `.env` in the root directory.
-2. Add your API key and preferred model to the file:
+2. Add your API key to the file:
 ```env
 GROQ_API_KEY=gsk_your_api_key_here
-GROQ_MODEL=mixtral-8x7b-32768
 ```
 3. Launch the agent:
 ```bash
 streamlit run agent.py
 ```
 You can now ask natural language queries like: *"Show the trend of failed login attempts by department."*
+
+### 5. Step 4: Streamlit Cloud Deployment
+If you wish to deploy this project yourself on Streamlit Community Cloud:
+1. Push this repository to a public GitHub account.
+2. Log into [share.streamlit.io](https://share.streamlit.io/) and click **New App**.
+3. Point the deployment to `app.py` for the Dashboard, and `agent.py` for the AI Agent.
+4. **Important for the Agent:** Before clicking Deploy, go to **Advanced Settings -> Secrets** and input your Groq API key:
+```toml
+GROQ_API_KEY="gsk_your_api_key_here"
+```
 
 ---
 
