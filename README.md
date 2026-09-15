@@ -9,6 +9,12 @@
 
 ---
 
+## 🚀 Live Deployments (Gate 3 & 4)
+* **Executive Dashboard:** [View Live Dashboard](https://datathon-e4opafeyjqqdbdxirjygbc.streamlit.app/)
+* **AgentIQ AI Chatbot:** [View Live AI Agent](https://datathon-e8veeg6bkxc9k8dbyi7cin.streamlit.app/)
+
+---
+
 ## 2. Track 2 Description
 Track 2 focuses on analyzing synthetic enterprise cybersecurity telemetry spanning **Identity & Access Management (IAM)** audit trails, **Endpoint Detection & Response (EDR)** telemetry, **Perimeter Network Firewall** logs, and **Identity/Asset Master** records to detect compromised accounts, malicious execution, lateral movement, and insider threats.
 
