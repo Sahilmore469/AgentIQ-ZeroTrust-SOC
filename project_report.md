@@ -4,54 +4,60 @@
 ---
 
 ## 1. Executive Summary
+
 **The Business Problem:**
-A cyber-command center faced the challenge of detecting compromised accounts and insider threats. However, the underlying data—comprising millions of network logs and IAM (Identity and Access Management) audit trails—was incredibly noisy, unstructured, and fragmented across different systems.
+Modern cybersecurity command centers face the daunting challenge of detecting compromised identities, lateral movement, and insider threats amidst massive, fragmented, and noisy telemetry streams across Identity & Access Management (IAM), Endpoint Detection & Response (EDR), and Network Firewalls.
 
 **Our Solution:**
-We developed a complete, end-to-end "Data to Insights" pipeline. We built an automated Python data rescue script to clean and unify the messy logs. We then built a live, interactive Streamlit Executive Dashboard to visualize threat metrics. Finally, we engineered a Graph-First AI Agent (powered by Groq and Llama 3) that allows security analysts to query the data using natural language.
+We architected and implemented an enterprise-grade "Data to Insights" pipeline featuring:
+1. **Automated Data Rescue & Engineering**: Rescued corrupted telemetry, standardized foreign keys, recovered Unix epoch timestamps, normalized protocols/statuses, and eliminated duplicates without losing legitimate events.
+2. **Star-Schema Analytical Data Model**: Structured data around `DIM_IDENTITY_ASSET` connected to `FACT_IAM`, `FACT_ENDPOINT`, and `FACT_FIREWALL`.
+3. **Cross-System Correlation Engine**: Linked IAM authentication events and perimeter firewall traffic using shared `session_id_norm` (320 exact matches) and host temporal proximity ($\pm 30$ min, 240 matches).
+4. **Explainable Multi-Signal Risk Scoring**: Synthesized identity, endpoint, network, and cross-system threat vectors into a deterministic 0–100 score with human-readable justifications.
+5. **Interactive SOC Command Center**: Built a 5-view Streamlit dashboard with global cascading filters, interactive entity drill-downs, and CSV exports.
+6. **Bonus Agentic AI Interface**: Retained standalone natural-language query capabilities via `agent.py`.
 
 ---
 
-## 2. Gate 2: Data Rescue & Engineering
-The provided synthetic datasets (`firewall_logs`, `iam_audit_trail`, `endpoint_alerts`, `identity_asset_master`) were highly unstructured. We built `data_rescue.py` using `pandas` to execute the following cleaning operations:
-
-* **ID Standardization:** Employee IDs were in multiple formats (e.g., `EMP 12345`, `emp-12345`). We used Regular Expressions (Regex) to strip non-numeric characters and uniformly prepend `EMP`, ensuring a perfect join key across tables.
-* **Categorical Normalization:** Department names (`information tech` -> `IT`) and Alert Severities (`Severe`, `P1`, `CRIT` -> `CRITICAL`) were mapped to standardized dictionaries.
-* **Timestamp Parsing:** We encountered a mix of US, EU, and ISO datetime strings. We utilized robust Pandas datetime parsing (`format='mixed'`) to cast all temporal data into standard UTC structures.
-* **Firewall Logic:** Mapped dozens of firewall action variants (e.g., `PASS`, `PERMIT`, `allow`) into binary `allow` or `deny` classifications, and coerced messy string byte counts into clean floats.
-* **Data Integrity:** Handled missing values via intelligent imputation, ran regex validation on IP addresses, and removed duplicate rows across all 4 datasets.
-* **Code Documentation (10 Bonus Pts):** Every major data cleaning operation in the script is accompanied by an explicit `# DECISION:` inline comment, meticulously documenting the rationale behind our pipeline architecture.
-
-*Proof of Cleaning:* Our pipeline reduced noise and dropped duplicates seamlessly (e.g., Firewall logs were reduced from 30,600 raw rows to exactly 30,000 clean, usable rows).
+## 2. Gate 1: Compliance, Sanity & Data Governance
+- **Data Dictionary**: Published [`data_dictionary.md`](file:///c:/Users/kenpa/OneDrive/Desktop/Datathon/data_dictionary.md) detailing all schemas, field definitions, data types, valid domains, key relationships, and derivation rules.
+- **Reproducible Pipeline**: All cleaning and validation steps are completely reproducible via `python data_rescue.py` and `python validate_cleaning.py`.
+- **Accurate Documentation**: Comprehensive `README.md` reflecting the exact code implementation, actual join statistics, and exact run commands.
 
 ---
 
-## 3. Gate 3: Executive Dashboarding & Analytics
-With clean data, we built `app.py`, a robust Python-based web dashboard using **Streamlit** and **Plotly**.
+## 3. Gate 2: Data Rescue & Engineering
+Our pipeline (`data_rescue.py` and `transformations.py`) executed systematic data rescue across all 4 datasets:
+- **ID Standardization**: Standardized messy user IDs (`EMP 12345`, `emp-12345`, `12345`) to `EMP{digits}` format, achieving 100.0% join rates to Identity Master.
+- **Hostname Normalization**: Stripped `.corp.local` domain suffixes, replaced underscores with hyphens, and uppercased hostnames, boosting EDR match rates to 93.62% and Firewall match rates to 88.88%.
+- **Timestamp Recovery**: Resolved mixed regional strings and converted raw Unix timestamps (e.g. `1787085290` $\rightarrow$ August 18, 2026 UTC) to standard UTC datetime.
+- **Protocol & Status Normalization**: Standardized IP protocol numbers (`6` $\rightarrow$ `TCP`, `17` $\rightarrow$ `UDP`, `1` $\rightarrow$ `ICMP`) and EDR statuses (`NEW`, `OPEN`, `IN_PROGRESS`, `CLOSED`, `FALSE_POSITIVE`).
+- **Telemetry Integrity Anomaly**: Flagged 497 alerts with impossible resolution timestamps (`resolved_timestamp < detected_timestamp`).
+- **Code Documentation**: Meticulously documented every transformation decision with explicit `# DECISION:` inline comments.
 
-**Key Features & Advanced Insights:**
-* **Global Interactivity:** A sidebar allows the CISO or security analyst to filter the entire dashboard by specific company departments.
-* **Geospatial Threat Mapping:** We engineered an interactive Plotly `choropleth` map that plots firewall `deny` actions by `geo_country`, providing a real-time visualization of where global network attacks are originating.
-* **Core KPIs & Gauges:** At a glance, the dashboard calculates Total Failed Logins, Critical Endpoint Alerts, and Total Firewall Blocks. The Average IAM Risk Score is visualized using an intuitive, color-coded Plotly Gauge Chart.
-* **Threat Storytelling:** 
-    * A Line Chart tracks the trend of failed login attempts over time.
-    * An Area Chart maps Firewall Deny actions by network protocol.
-    * A Bar Chart exposes the Top 10 users with the most failed authentications.
-* **Actionable Suspicious User Matrix:** We cross-referenced the `IAM` and `Endpoint Alerts` tables to generate a dynamic table highlighting "Suspicious Users"—employees with an unusually high number of failed logins *and* active endpoint alerts. We included a **1-click CSV Export** button, allowing SOC teams to instantly download the hitlist for remediation.
-
----
-
-## 4. Gate 4: The Bonus AI Agent (AgentIQ)
-To fulfill the ultimate Datathon challenge, we built `agent.py`, a Graph-First AI assistant.
-
-**Architecture & Code Elegance:**
-* **Dynamic LLM Engine:** We utilized **Groq's API** for ultra-fast natural language inference. We architected the application to pull the `GROQ_MODEL` dynamically from a `.env` file, future-proofing the agent against model deprecations without requiring source code changes.
-* **Intent Routing & UX:** When an analyst asks a question, the LLM classifies the intent (e.g., `failed_logins_trend`) and returns a JSON payload. We also engineered a custom `help` intent to guide users on how to interact with the system.
-* **Defensive JSON Parsing:** Because LLMs often hallucinate markdown formatting, we implemented custom string-stripping logic to defensively parse the LLM's raw output, ensuring the application never crashes due to unexpected markdown fences (```json).
-* **Graceful Failure Handling:** We implemented strict empty-dataframe checks (`if df.empty:`) before chart generation. If a user filters out data, the agent fails gracefully with a human-readable message rather than throwing a Pandas rendering error.
-* **Dynamic Generation:** Python intercepts the validated JSON intent, queries the cleaned datasets, and dynamically renders the correct Plotly chart (Line vs. Bar) alongside an AI-generated textual summary.
+*Validation Summary:*
+- Master: 3,090 raw $\rightarrow$ 3,000 clean rows (0 duplicates, 100% unique PK).
+- Firewall: 30,600 raw $\rightarrow$ 30,000 clean rows (600 duplicates removed).
+- IAM: 20,500 raw $\rightarrow$ 20,000 clean rows (500 duplicates removed, 5,631 missing departments backfilled).
+- Endpoint: 8,240 raw $\rightarrow$ 8,000 clean rows (240 duplicates removed).
 
 ---
 
-## 5. Conclusion
-By treating the data like a real corporate consulting sprint, we successfully transitioned from chaotic, messy logs to a governed analytics pipeline, culminating in a highly interactive, AI-powered Cyber-Command interface. 
+## 4. Gate 3: Executive Dashboarding & Business Value
+Built `app.py` using Streamlit and Plotly, delivering 5 comprehensive operational views:
+1. **Command Center Overview**: Top security KPI cards, unified cross-system activity timeline, Top 10 At-Risk Identities, Top 10 At-Risk Endpoints, Department risk concentration, and automated analytical insights.
+2. **Identity & IAM Investigation**: Authentication failure trends by department, top failure accounts, credential attack signatures, and repeated MFA failure hitlists (Rule 2).
+3. **Endpoint Alert Investigation**: EDR severity breakdowns, workflow status distributions, impossible resolution timestamps anomaly table, and critical threat tables.
+4. **Network & Firewall Investigation**: Geospatial Choropleth threat origin map, protocol deny area trends, top blocked destination ports, and high-threat host profiles.
+5. **Cross-System Correlation Matrix & Entity Deep-Dive**: Direct exploration of IAM ↔ Firewall session matches, temporal proximity correlations, data model diagnostics, and interactive user-to-threat trace drilldown.
+
+---
+
+## 5. Gate 4: Excellence & Bonus AI Agent
+- **Modular Codebase**: Clean separation of concerns across `transformations.py`, `data_rescue.py`, `data_model.py`, `correlation.py`, `risk_scoring.py`, `analytical_layer.py`, `business_logic.py`, and `app.py`.
+- **Bonus AI Agent (`agent.py`)**: Fully preserved and operational for natural language queries (powered by Groq).
+
+---
+
+## 6. Conclusion
+By applying disciplined data engineering, robust star-schema modeling, and explainable multi-signal risk analytics, we delivered an enterprise-grade cybersecurity command center that bridges raw logs into actionable threat intelligence.
